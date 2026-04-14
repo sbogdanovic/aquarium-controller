@@ -1,6 +1,7 @@
 #include "controller_indicator.h"
 
-#include "driver/rmt.h"
+#include "driver/rmt_tx.h"
+#include "driver/rmt_encoder.h"
 #include "esp_check.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -16,13 +17,7 @@
 #define INDICATOR_QUEUE_LEN     4
 #define DEFAULT_PIXEL_COUNT     1
 #define DEFAULT_BRIGHTNESS      32
-#define INDICATOR_RMT_CHANNEL   RMT_CHANNEL_0
-#define WS2812_CLK_DIV          4
-#define WS2812_T0H              8    // 0.4us @ 20MHz
-#define WS2812_T0L              17   // 0.85us @ 20MHz
-#define WS2812_T1H              16   // 0.8us @ 20MHz
-#define WS2812_T1L              9    // 0.45us @ 20MHz
-#define WS2812_RESET_TICKS      1000 // 50us reset pulse
+#define WS2812_RMT_RES_HZ      (10 * 1000 * 1000) // 10 MHz, 1 tick = 0.1 µs
 
 typedef struct {
     uint8_t r;
@@ -33,7 +28,9 @@ typedef struct {
 typedef struct {
     controller_indicator_config_t cfg;
     QueueHandle_t queue;
-    rmt_channel_t channel;
+    rmt_channel_handle_t rmt_channel;
+    rmt_encoder_handle_t rmt_encoder;
+    uint8_t *pixel_buf;
     bool fault_latched;
 } controller_indicator_ctx_t;
 
@@ -57,7 +54,6 @@ static void indicator_deinit_rmt(controller_indicator_ctx_t *ctx);
 static void indicator_task(void *arg);
 static void apply_color(controller_indicator_ctx_t *ctx, const indicator_color_t *color);
 static uint8_t scale_channel(const controller_indicator_ctx_t *ctx, uint8_t value);
-static rmt_item32_t *encode_byte(rmt_item32_t *item, uint8_t byte);
 
 esp_err_t controller_indicator_start(const controller_indicator_config_t *config)
 {
@@ -82,13 +78,19 @@ esp_err_t controller_indicator_start(const controller_indicator_config_t *config
     if (s_ctx.cfg.brightness == 0) {
         s_ctx.cfg.brightness = DEFAULT_BRIGHTNESS;
     }
-    s_ctx.channel = RMT_CHANNEL_MAX;
+
+    s_ctx.pixel_buf = calloc(s_ctx.cfg.pixel_count, 3);
+    if (!s_ctx.pixel_buf) {
+        return ESP_ERR_NO_MEM;
+    }
 
     ESP_RETURN_ON_ERROR(indicator_configure_rmt(&s_ctx), TAG, "rmt init failed");
 
     s_ctx.queue = xQueueCreate(INDICATOR_QUEUE_LEN, sizeof(controller_indicator_command_t));
     if (!s_ctx.queue) {
         indicator_deinit_rmt(&s_ctx);
+        free(s_ctx.pixel_buf);
+        s_ctx.pixel_buf = NULL;
         return ESP_ERR_NO_MEM;
     }
 
@@ -97,6 +99,8 @@ esp_err_t controller_indicator_start(const controller_indicator_config_t *config
         vQueueDelete(s_ctx.queue);
         s_ctx.queue = NULL;
         indicator_deinit_rmt(&s_ctx);
+        free(s_ctx.pixel_buf);
+        s_ctx.pixel_buf = NULL;
         return ESP_FAIL;
     }
 
@@ -107,25 +111,54 @@ esp_err_t controller_indicator_start(const controller_indicator_config_t *config
 
 static esp_err_t indicator_configure_rmt(controller_indicator_ctx_t *ctx)
 {
-    rmt_config_t config = RMT_DEFAULT_CONFIG_TX(ctx->cfg.data_gpio, INDICATOR_RMT_CHANNEL);
-    config.clk_div = WS2812_CLK_DIV;
-    esp_err_t err = rmt_config(&config);
-    if (err != ESP_OK) {
-        return err;
-    }
+    rmt_tx_channel_config_t tx_chan_config = {
+        .clk_src = RMT_CLK_SRC_DEFAULT,
+        .gpio_num = ctx->cfg.data_gpio,
+        .mem_block_symbols = 64,
+        .resolution_hz = WS2812_RMT_RES_HZ,
+        .trans_queue_depth = 4,
+        .flags.invert_out = false,
+        .flags.with_dma = false,
+    };
+    ESP_RETURN_ON_ERROR(rmt_new_tx_channel(&tx_chan_config, &ctx->rmt_channel), TAG,
+                        "new tx channel failed");
 
-    err = rmt_driver_install(config.channel, 0, 0);
-    if (err == ESP_OK) {
-        ctx->channel = config.channel;
-    }
-    return err;
+    // WS2812 timing at 10 MHz (0.1 µs per tick):
+    // Bit 0: high 0.4 µs (4 ticks), low 0.85 µs (8 ticks)
+    // Bit 1: high 0.8 µs (8 ticks), low 0.45 µs (4 ticks)
+    rmt_bytes_encoder_config_t bytes_encoder_config = {
+        .bit0 = {
+            .duration0 = 4,
+            .level0 = 1,
+            .duration1 = 8,
+            .level1 = 0,
+        },
+        .bit1 = {
+            .duration0 = 8,
+            .level0 = 1,
+            .duration1 = 4,
+            .level1 = 0,
+        },
+        .flags.msb_first = true,
+    };
+    ESP_RETURN_ON_ERROR(rmt_new_bytes_encoder(&bytes_encoder_config, &ctx->rmt_encoder), TAG,
+                        "new bytes encoder failed");
+
+    ESP_RETURN_ON_ERROR(rmt_enable(ctx->rmt_channel), TAG, "enable channel failed");
+
+    return ESP_OK;
 }
 
 static void indicator_deinit_rmt(controller_indicator_ctx_t *ctx)
 {
-    if (ctx->channel < RMT_CHANNEL_MAX) {
-        rmt_driver_uninstall(ctx->channel);
-        ctx->channel = RMT_CHANNEL_MAX;
+    if (ctx->rmt_channel) {
+        rmt_disable(ctx->rmt_channel);
+        rmt_del_channel(ctx->rmt_channel);
+        ctx->rmt_channel = NULL;
+    }
+    if (ctx->rmt_encoder) {
+        rmt_del_encoder(ctx->rmt_encoder);
+        ctx->rmt_encoder = NULL;
     }
 }
 
@@ -165,7 +198,7 @@ static void indicator_task(void *arg)
 
 static void apply_color(controller_indicator_ctx_t *ctx, const indicator_color_t *color)
 {
-    if (ctx->channel >= RMT_CHANNEL_MAX) {
+    if (!ctx->rmt_channel || !ctx->rmt_encoder || !ctx->pixel_buf) {
         return;
     }
 
@@ -173,33 +206,24 @@ static void apply_color(controller_indicator_ctx_t *ctx, const indicator_color_t
     const uint8_t g = scale_channel(ctx, color->g);
     const uint8_t b = scale_channel(ctx, color->b);
 
-    const size_t bit_count = ctx->cfg.pixel_count * 24;
-    const size_t item_count = bit_count + 1;
-    rmt_item32_t *items = calloc(item_count, sizeof(rmt_item32_t));
-    if (!items) {
-        ESP_LOGW(TAG, "LED buffer allocation failed");
+    // WS2812 expects GRB byte order
+    for (uint32_t pixel = 0; pixel < ctx->cfg.pixel_count; ++pixel) {
+        ctx->pixel_buf[pixel * 3 + 0] = g;
+        ctx->pixel_buf[pixel * 3 + 1] = r;
+        ctx->pixel_buf[pixel * 3 + 2] = b;
+    }
+
+    rmt_transmit_config_t tx_config = {
+        .loop_count = 0,
+        .flags.eot_level = 0, // low level after transmission acts as WS2812 reset
+    };
+    esp_err_t err = rmt_transmit(ctx->rmt_channel, ctx->rmt_encoder, ctx->pixel_buf,
+                                 ctx->cfg.pixel_count * 3, &tx_config);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "LED transmit failed: %s", esp_err_to_name(err));
         return;
     }
-
-    rmt_item32_t *cursor = items;
-    for (uint32_t pixel = 0; pixel < ctx->cfg.pixel_count; ++pixel) {
-        cursor = encode_byte(cursor, g);
-        cursor = encode_byte(cursor, r);
-        cursor = encode_byte(cursor, b);
-    }
-
-    rmt_item32_t *reset_item = &items[bit_count];
-    reset_item->duration0 = 0;
-    reset_item->level0 = 0;
-    reset_item->duration1 = WS2812_RESET_TICKS;
-    reset_item->level1 = 0;
-
-    esp_err_t err = rmt_write_items(ctx->channel, items, item_count, true);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "LED refresh failed: %s", esp_err_to_name(err));
-    }
-
-    free(items);
+    rmt_tx_wait_all_done(ctx->rmt_channel, 100);
 }
 
 static uint8_t scale_channel(const controller_indicator_ctx_t *ctx, uint8_t value)
@@ -208,26 +232,6 @@ static uint8_t scale_channel(const controller_indicator_ctx_t *ctx, uint8_t valu
         return value;
     }
     return (uint8_t)((value * ctx->cfg.brightness) / 255);
-}
-
-static rmt_item32_t *encode_byte(rmt_item32_t *item, uint8_t byte)
-{
-    for (int bit = 7; bit >= 0; --bit) {
-        const bool set = ((byte >> bit) & 0x1) != 0;
-        if (set) {
-            item->duration0 = WS2812_T1H;
-            item->level0 = 1;
-            item->duration1 = WS2812_T1L;
-            item->level1 = 0;
-        } else {
-            item->duration0 = WS2812_T0H;
-            item->level0 = 1;
-            item->duration1 = WS2812_T0L;
-            item->level1 = 0;
-        }
-        ++item;
-    }
-    return item;
 }
 
 esp_err_t controller_indicator_publish(controller_indicator_command_t command)

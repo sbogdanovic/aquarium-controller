@@ -27,7 +27,7 @@ Firmware built with ESP-IDF for monitoring an XKC-Y23A water level sensor on an 
 Adjust GPIO numbers in `idf.py menuconfig` if your board uses different pins.
 
 ## Getting Started
-1. Install ESP-IDF v5.1 or newer and export the environment.
+1. Install ESP-IDF v6.0 or newer and export the environment.
 2. Set the target once in the project directory:
    ```sh
    idf.py set-target esp32s3
@@ -37,6 +37,14 @@ Adjust GPIO numbers in `idf.py menuconfig` if your board uses different pins.
    idf.py -p /dev/tty.usbmodemXYZ flash monitor
    ```
 4. Watch the console for sensor voltage logs and ensure the LED/relay tracks the water level.
+
+### Clean build (when switching IDF versions or after major changes)
+
+```sh
+rm -rf build
+idf.py set-target esp32s3
+idf.py build
+```
 
 ## Configuration Tips
 - Use `idf.py menuconfig` ▸ *Water Level Controller* to change GPIO assignments, switch between analog/digital sensor modes, set the digital active level/pull resistors, adjust the sample count, poll period, or the sensor-disconnect guard voltage.
