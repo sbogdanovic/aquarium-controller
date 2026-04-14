@@ -35,11 +35,15 @@ esp_err_t controller_core_init(void)
         return ESP_OK;
     }
 
-    ESP_RETURN_ON_ERROR(water_sensor_subscribe(&s_water_sensor_queue), TAG,
-                        "water sensor subscribe failed");
+    ESP_RETURN_ON_ERROR(
+        water_sensor_subscribe(&s_water_sensor_queue), TAG, "water sensor subscribe failed");
 
-    if (xTaskCreate(controller_core_task, "ctrl-core", CONTROLLER_TASK_STACK_SIZE, NULL,
-                    CONTROLLER_TASK_PRIORITY, &s_task_handle) != pdPASS) {
+    if (xTaskCreate(controller_core_task,
+                    "ctrl-core",
+                    CONTROLLER_TASK_STACK_SIZE,
+                    NULL,
+                    CONTROLLER_TASK_PRIORITY,
+                    &s_task_handle) != pdPASS) {
         return ESP_FAIL;
     }
 
@@ -87,8 +91,10 @@ static void handle_water_sensor_event(water_sensor_event_t event_id)
     }
 
     if (new_state != s_state) {
-        ESP_LOGI(TAG, "State transition %s -> %s",
-                 controller_state_name(s_state), controller_state_name(new_state));
+        ESP_LOGI(TAG,
+                 "State transition %s -> %s",
+                 controller_state_name(s_state),
+                 controller_state_name(new_state));
         s_state = new_state;
     }
 }
@@ -109,8 +115,10 @@ static void publish_pump_command(water_pump_command_t command)
 {
     esp_err_t err = water_pump_publish(command);
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Pump publish failed for %s (%s)",
-                 water_pump_command_name(command), esp_err_to_name(err));
+        ESP_LOGW(TAG,
+                 "Pump publish failed for %s (%s)",
+                 water_pump_command_name(command),
+                 esp_err_to_name(err));
     }
 }
 

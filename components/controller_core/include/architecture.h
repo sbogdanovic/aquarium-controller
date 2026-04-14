@@ -54,8 +54,8 @@
  *
  * 1. Define a command enum or struct plus a publish helper in the component header.
  * 2. Create a queue inside the actuator component and have the worker task block on it.
- * 3. Implement the publish helper so it enqueues a command (returning `ESP_ERR_INVALID_STATE` if the
- *    component is disabled).
+ * 3. Implement the publish helper so it enqueues a command (returning `ESP_ERR_INVALID_STATE` if
+ * the component is disabled).
  * 4. Have controller_core call the publish helper whenever a state transition requires it.
  *
  * ## Thread Safety

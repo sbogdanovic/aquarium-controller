@@ -15,8 +15,8 @@
 
 #define WATER_LEVEL_SENSOR_TASK_STACK 4096
 #define WATER_LEVEL_SENSOR_TASK_PRIO  4
-#define SAMPLE_DELAY_MS         2
-#define DISCHARGE_DELAY_MS      5
+#define SAMPLE_DELAY_MS               2
+#define DISCHARGE_DELAY_MS            5
 
 typedef struct {
     water_sensor_config_t cfg;
@@ -63,14 +63,15 @@ esp_err_t water_sensor_start(const water_sensor_config_t *config)
     memset(&s_ctx, 0, sizeof(s_ctx));
     s_ctx.cfg = *config;
     s_ctx.last_event = WATER_LEVEL_SENSOR_EVENT_UNKNOWN;
-    s_ctx.event_queue = xQueueCreate(WATER_LEVEL_SENSOR_EVENT_QUEUE_LEN, sizeof(water_sensor_event_t));
+    s_ctx.event_queue =
+        xQueueCreate(WATER_LEVEL_SENSOR_EVENT_QUEUE_LEN, sizeof(water_sensor_event_t));
     if (!s_ctx.event_queue) {
         return ESP_ERR_NO_MEM;
     }
 
     if (s_ctx.cfg.use_digital_input) {
-        ESP_RETURN_ON_ERROR(water_sensor_configure_sensor_gpio(&s_ctx), TAG,
-                            "Failed to configure sensor GPIO");
+        ESP_RETURN_ON_ERROR(
+            water_sensor_configure_sensor_gpio(&s_ctx), TAG, "Failed to configure sensor GPIO");
     } else {
         ESP_RETURN_ON_ERROR(water_sensor_configure_adc(&s_ctx), TAG, "Failed to configure ADC");
         esp_err_t gpio_err = water_sensor_configure_sensor_gpio(&s_ctx);
@@ -79,8 +80,12 @@ esp_err_t water_sensor_start(const water_sensor_config_t *config)
         }
     }
 
-    if (xTaskCreate(water_sensor_task, "water-sensor", WATER_LEVEL_SENSOR_TASK_STACK, &s_ctx,
-                    WATER_LEVEL_SENSOR_TASK_PRIO, NULL) != pdPASS) {
+    if (xTaskCreate(water_sensor_task,
+                    "water-sensor",
+                    WATER_LEVEL_SENSOR_TASK_STACK,
+                    &s_ctx,
+                    WATER_LEVEL_SENSOR_TASK_PRIO,
+                    NULL) != pdPASS) {
         vQueueDelete(s_ctx.event_queue);
         s_ctx.event_queue = NULL;
         return ESP_FAIL;
@@ -102,9 +107,9 @@ static esp_err_t water_sensor_configure_adc(water_sensor_ctx_t *ctx)
         .bitwidth = ctx->cfg.bitwidth,
         .atten = ctx->cfg.atten,
     };
-    ESP_RETURN_ON_ERROR(
-        adc_oneshot_config_channel(ctx->adc_handle, ctx->cfg.channel, &chan_cfg), TAG,
-        "channel config failed");
+    ESP_RETURN_ON_ERROR(adc_oneshot_config_channel(ctx->adc_handle, ctx->cfg.channel, &chan_cfg),
+                        TAG,
+                        "channel config failed");
 
 #if SOC_ADC_CALIBRATION_SUPPORTED
     adc_cali_line_fitting_config_t cali_cfg = {
@@ -137,11 +142,15 @@ static esp_err_t water_sensor_read_mv(water_sensor_ctx_t *ctx, int *reading_mv)
         water_sensor_disable_discharge(ctx);
 
         int raw = 0;
-        ESP_GOTO_ON_ERROR(adc_oneshot_read(ctx->adc_handle, ctx->cfg.channel, &raw), cleanup, TAG,
+        ESP_GOTO_ON_ERROR(adc_oneshot_read(ctx->adc_handle, ctx->cfg.channel, &raw),
+                          cleanup,
+                          TAG,
                           "adc read failed");
         if (ctx->calibration_enabled) {
             int mv = 0;
-            ESP_GOTO_ON_ERROR(adc_cali_raw_to_voltage(ctx->cali_handle, raw, &mv), cleanup, TAG,
+            ESP_GOTO_ON_ERROR(adc_cali_raw_to_voltage(ctx->cali_handle, raw, &mv),
+                              cleanup,
+                              TAG,
                               "calibration failed");
             total += mv;
         } else {
@@ -218,8 +227,8 @@ static void water_sensor_task(void *param)
             err = water_sensor_read_level(ctx, &reading_value);
             if (err == ESP_OK) {
                 evt = classify_digital(ctx, reading_value);
-                ESP_LOGI(TAG, "Reading level %d -> %s", reading_value,
-                         water_sensor_event_name(evt));
+                ESP_LOGI(
+                    TAG, "Reading level %d -> %s", reading_value, water_sensor_event_name(evt));
             } else {
                 ESP_LOGW(TAG, "Digital sensor read failed: %s", esp_err_to_name(err));
                 evt = WATER_LEVEL_SENSOR_EVENT_UNKNOWN;
@@ -228,8 +237,7 @@ static void water_sensor_task(void *param)
             err = water_sensor_read_mv(ctx, &reading_value);
             if (err == ESP_OK) {
                 evt = classify_reading(ctx, reading_value);
-                ESP_LOGI(TAG, "Reading %d mV -> %s", reading_value,
-                         water_sensor_event_name(evt));
+                ESP_LOGI(TAG, "Reading %d mV -> %s", reading_value, water_sensor_event_name(evt));
             } else {
                 ESP_LOGW(TAG, "Sensor read failed: %s", esp_err_to_name(err));
                 evt = WATER_LEVEL_SENSOR_EVENT_UNKNOWN;
@@ -273,7 +281,8 @@ esp_err_t water_sensor_subscribe(QueueHandle_t *queue)
 const char *water_sensor_event_name(water_sensor_event_t event)
 {
     const size_t index = (size_t)event;
-    if (index < (sizeof(WATER_LEVEL_SENSOR_EVENT_NAMES) / sizeof(WATER_LEVEL_SENSOR_EVENT_NAMES[0])) &&
+    if (index <
+            (sizeof(WATER_LEVEL_SENSOR_EVENT_NAMES) / sizeof(WATER_LEVEL_SENSOR_EVENT_NAMES[0])) &&
         WATER_LEVEL_SENSOR_EVENT_NAMES[index]) {
         return WATER_LEVEL_SENSOR_EVENT_NAMES[index];
     }
@@ -315,7 +324,8 @@ static esp_err_t water_sensor_configure_sensor_gpio(water_sensor_ctx_t *ctx)
 
     if (ctx->cfg.use_digital_input) {
         cfg.pull_up_en = ctx->cfg.digital_pullup_en ? GPIO_PULLUP_ENABLE : GPIO_PULLUP_DISABLE;
-        cfg.pull_down_en = ctx->cfg.digital_pulldown_en ? GPIO_PULLDOWN_ENABLE : GPIO_PULLDOWN_DISABLE;
+        cfg.pull_down_en =
+            ctx->cfg.digital_pulldown_en ? GPIO_PULLDOWN_ENABLE : GPIO_PULLDOWN_DISABLE;
     } else {
         cfg.pull_down_en = GPIO_PULLDOWN_ENABLE;
     }
@@ -331,14 +341,18 @@ static void water_sensor_disable_discharge(const water_sensor_ctx_t *ctx)
 
     esp_err_t err = gpio_set_direction(ctx->sensor_gpio, GPIO_MODE_DISABLE);
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to disable digital path on GPIO%d: %s", ctx->sensor_gpio,
+        ESP_LOGW(TAG,
+                 "Failed to disable digital path on GPIO%d: %s",
+                 ctx->sensor_gpio,
                  esp_err_to_name(err));
         return;
     }
 
     err = gpio_pulldown_dis(ctx->sensor_gpio);
     if (err != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to release pulldown on GPIO%d: %s", ctx->sensor_gpio,
+        ESP_LOGW(TAG,
+                 "Failed to release pulldown on GPIO%d: %s",
+                 ctx->sensor_gpio,
                  esp_err_to_name(err));
     }
 }

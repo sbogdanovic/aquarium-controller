@@ -8,10 +8,10 @@
 #include "esp_log.h"
 #include "sdkconfig.h"
 
-#define SENSOR_UNIT       ADC_UNIT_1
-#define SENSOR_BITWIDTH   ADC_BITWIDTH_DEFAULT
-#define SENSOR_ATTEN      ADC_ATTEN_DB_12
-#define SENSOR_CHANNEL    ((adc_channel_t)CONFIG_WATER_LEVEL_SENSOR_ADC_CHANNEL)
+#define SENSOR_UNIT     ADC_UNIT_1
+#define SENSOR_BITWIDTH ADC_BITWIDTH_DEFAULT
+#define SENSOR_ATTEN    ADC_ATTEN_DB_12
+#define SENSOR_CHANNEL  ((adc_channel_t)CONFIG_WATER_LEVEL_SENSOR_ADC_CHANNEL)
 
 static const char *TAG = "water_level";
 
@@ -28,26 +28,26 @@ void app_main(void)
         .poll_period_ms = CONFIG_WATER_LEVEL_POLL_PERIOD_MS,
         .threshold_mv = CONFIG_WATER_LEVEL_SENSOR_THRESHOLD_MV,
         .disconnect_mv = CONFIG_WATER_LEVEL_SENSOR_DISCONNECT_MV,
-    #if CONFIG_WATER_LEVEL_SENSOR_DIGITAL_INPUT
+#if CONFIG_WATER_LEVEL_SENSOR_DIGITAL_INPUT
         .use_digital_input = true,
-    #else
+#else
         .use_digital_input = false,
-    #endif
-    #if CONFIG_WATER_LEVEL_SENSOR_DIGITAL_ACTIVE_HIGH
+#endif
+#if CONFIG_WATER_LEVEL_SENSOR_DIGITAL_ACTIVE_HIGH
         .digital_active_high = true,
-    #else
+#else
         .digital_active_high = false,
-    #endif
-    #if CONFIG_WATER_LEVEL_SENSOR_DIGITAL_PULL_UP
+#endif
+#if CONFIG_WATER_LEVEL_SENSOR_DIGITAL_PULL_UP
         .digital_pullup_en = true,
-    #else
+#else
         .digital_pullup_en = false,
-    #endif
-    #if CONFIG_WATER_LEVEL_SENSOR_DIGITAL_PULL_DOWN
+#endif
+#if CONFIG_WATER_LEVEL_SENSOR_DIGITAL_PULL_DOWN
         .digital_pulldown_en = true,
-    #else
+#else
         .digital_pulldown_en = false,
-    #endif
+#endif
     };
     ESP_ERROR_CHECK(water_sensor_start(&sensor_cfg));
 
@@ -66,10 +66,11 @@ void app_main(void)
     ESP_ERROR_CHECK(water_pump_start(&pump_cfg));
 
     const doser_config_t doser_cfg = {
-        .relay_gpios = {
-            (gpio_num_t)CONFIG_DOSER1_GPIO,
-            (gpio_num_t)CONFIG_DOSER2_GPIO,
-        },
+        .relay_gpios =
+            {
+                (gpio_num_t)CONFIG_DOSER1_GPIO,
+                (gpio_num_t)CONFIG_DOSER2_GPIO,
+            },
         .ms_per_ml = CONFIG_DOSER_MS_PER_ML,
     };
     ESP_ERROR_CHECK(doser_start(&doser_cfg));

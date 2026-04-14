@@ -17,7 +17,7 @@
 #define INDICATOR_QUEUE_LEN     4
 #define DEFAULT_PIXEL_COUNT     1
 #define DEFAULT_BRIGHTNESS      32
-#define WS2812_RMT_RES_HZ      (10 * 1000 * 1000) // 10 MHz, 1 tick = 0.1 µs
+#define WS2812_RMT_RES_HZ       (10 * 1000 * 1000) // 10 MHz, 1 tick = 0.1 µs
 
 typedef struct {
     uint8_t r;
@@ -94,8 +94,12 @@ esp_err_t controller_indicator_start(const controller_indicator_config_t *config
         return ESP_ERR_NO_MEM;
     }
 
-    if (xTaskCreate(indicator_task, "water-led", INDICATOR_TASK_STACK, &s_ctx,
-                    INDICATOR_TASK_PRIORITY, NULL) != pdPASS) {
+    if (xTaskCreate(indicator_task,
+                    "water-led",
+                    INDICATOR_TASK_STACK,
+                    &s_ctx,
+                    INDICATOR_TASK_PRIORITY,
+                    NULL) != pdPASS) {
         vQueueDelete(s_ctx.queue);
         s_ctx.queue = NULL;
         indicator_deinit_rmt(&s_ctx);
@@ -120,28 +124,31 @@ static esp_err_t indicator_configure_rmt(controller_indicator_ctx_t *ctx)
         .flags.invert_out = false,
         .flags.with_dma = false,
     };
-    ESP_RETURN_ON_ERROR(rmt_new_tx_channel(&tx_chan_config, &ctx->rmt_channel), TAG,
-                        "new tx channel failed");
+    ESP_RETURN_ON_ERROR(
+        rmt_new_tx_channel(&tx_chan_config, &ctx->rmt_channel), TAG, "new tx channel failed");
 
     // WS2812 timing at 10 MHz (0.1 µs per tick):
     // Bit 0: high 0.4 µs (4 ticks), low 0.85 µs (8 ticks)
     // Bit 1: high 0.8 µs (8 ticks), low 0.45 µs (4 ticks)
     rmt_bytes_encoder_config_t bytes_encoder_config = {
-        .bit0 = {
-            .duration0 = 4,
-            .level0 = 1,
-            .duration1 = 8,
-            .level1 = 0,
-        },
-        .bit1 = {
-            .duration0 = 8,
-            .level0 = 1,
-            .duration1 = 4,
-            .level1 = 0,
-        },
+        .bit0 =
+            {
+                .duration0 = 4,
+                .level0 = 1,
+                .duration1 = 8,
+                .level1 = 0,
+            },
+        .bit1 =
+            {
+                .duration0 = 8,
+                .level0 = 1,
+                .duration1 = 4,
+                .level1 = 0,
+            },
         .flags.msb_first = true,
     };
-    ESP_RETURN_ON_ERROR(rmt_new_bytes_encoder(&bytes_encoder_config, &ctx->rmt_encoder), TAG,
+    ESP_RETURN_ON_ERROR(rmt_new_bytes_encoder(&bytes_encoder_config, &ctx->rmt_encoder),
+                        TAG,
                         "new bytes encoder failed");
 
     ESP_RETURN_ON_ERROR(rmt_enable(ctx->rmt_channel), TAG, "enable channel failed");
@@ -217,8 +224,8 @@ static void apply_color(controller_indicator_ctx_t *ctx, const indicator_color_t
         .loop_count = 0,
         .flags.eot_level = 0, // low level after transmission acts as WS2812 reset
     };
-    esp_err_t err = rmt_transmit(ctx->rmt_channel, ctx->rmt_encoder, ctx->pixel_buf,
-                                 ctx->cfg.pixel_count * 3, &tx_config);
+    esp_err_t err = rmt_transmit(
+        ctx->rmt_channel, ctx->rmt_encoder, ctx->pixel_buf, ctx->cfg.pixel_count * 3, &tx_config);
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "LED transmit failed: %s", esp_err_to_name(err));
         return;
@@ -242,10 +249,11 @@ esp_err_t controller_indicator_publish(controller_indicator_command_t command)
 
     if (xQueueSend(s_ctx.queue, &command, 0) != pdTRUE) {
         const size_t index = (size_t)command;
-        const char *name = (index < (sizeof(INDICATOR_COMMAND_NAMES) / sizeof(INDICATOR_COMMAND_NAMES[0])) &&
-                           INDICATOR_COMMAND_NAMES[index])
-                              ? INDICATOR_COMMAND_NAMES[index]
-                              : "UNKNOWN";
+        const char *name =
+            (index < (sizeof(INDICATOR_COMMAND_NAMES) / sizeof(INDICATOR_COMMAND_NAMES[0])) &&
+             INDICATOR_COMMAND_NAMES[index])
+                ? INDICATOR_COMMAND_NAMES[index]
+                : "UNKNOWN";
         ESP_LOGW(TAG, "Indicator queue full, dropping %s", name);
         return ESP_ERR_TIMEOUT;
     }

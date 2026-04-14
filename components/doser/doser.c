@@ -11,9 +11,9 @@
 #include <stdio.h>
 #include <string.h>
 
-#define DOSER_TASK_STACK     2048
-#define DOSER_TASK_PRIORITY  5
-#define DOSER_QUEUE_LEN      4
+#define DOSER_TASK_STACK    2048
+#define DOSER_TASK_PRIORITY 5
+#define DOSER_QUEUE_LEN     4
 
 typedef struct {
     gpio_num_t relay_gpio;
@@ -52,12 +52,15 @@ esp_err_t doser_start(const doser_config_t *config)
     }
 
     for (size_t i = 0; i < CONFIG_DOSER_COUNT; ++i) {
-        ESP_RETURN_ON_ERROR(init_channel(&s_ctx.channels[i], s_ctx.cfg.relay_gpios[i], i), TAG,
+        ESP_RETURN_ON_ERROR(init_channel(&s_ctx.channels[i], s_ctx.cfg.relay_gpios[i], i),
+                            TAG,
                             "channel init failed");
     }
 
     s_started = true;
-    ESP_LOGI(TAG, "Doser component started (%d channels, %d ms/ml)", CONFIG_DOSER_COUNT,
+    ESP_LOGI(TAG,
+             "Doser component started (%d channels, %d ms/ml)",
+             CONFIG_DOSER_COUNT,
              (int)s_ctx.cfg.ms_per_ml);
     return ESP_OK;
 }
@@ -79,8 +82,9 @@ static esp_err_t init_channel(doser_channel_t *channel, gpio_num_t gpio, size_t 
         ESP_LOGW(TAG, "%s disabled (GPIO%d)", channel->name, (int)gpio);
     }
 
-    if (xTaskCreate(doser_task, channel->name, DOSER_TASK_STACK, channel,
-                    DOSER_TASK_PRIORITY, NULL) != pdPASS) {
+    if (xTaskCreate(
+            doser_task, channel->name, DOSER_TASK_STACK, channel, DOSER_TASK_PRIORITY, NULL) !=
+        pdPASS) {
         vQueueDelete(channel->queue);
         channel->queue = NULL;
         return ESP_FAIL;
@@ -124,7 +128,8 @@ static void handle_dose_request(doser_channel_t *channel, uint32_t milliliters)
     }
 
     if (channel->relay_gpio < 0) {
-        ESP_LOGW(TAG, "%s requested %u ml but GPIO is disabled", channel->name, (unsigned)milliliters);
+        ESP_LOGW(
+            TAG, "%s requested %u ml but GPIO is disabled", channel->name, (unsigned)milliliters);
         return;
     }
 
@@ -133,8 +138,12 @@ static void handle_dose_request(doser_channel_t *channel, uint32_t milliliters)
         return;
     }
 
-    const TickType_t duration_ticks = pdMS_TO_TICKS(duration_ms > UINT32_MAX ? UINT32_MAX : duration_ms);
-    ESP_LOGI(TAG, "%s dosing %u ml (~%llu ms)", channel->name, (unsigned)milliliters,
+    const TickType_t duration_ticks =
+        pdMS_TO_TICKS(duration_ms > UINT32_MAX ? UINT32_MAX : duration_ms);
+    ESP_LOGI(TAG,
+             "%s dosing %u ml (~%llu ms)",
+             channel->name,
+             (unsigned)milliliters,
              (unsigned long long)duration_ms);
     gpio_set_level(channel->relay_gpio, 1);
     vTaskDelay(duration_ticks == 0 ? 1 : duration_ticks);

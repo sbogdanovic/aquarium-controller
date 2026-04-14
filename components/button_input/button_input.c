@@ -9,10 +9,10 @@
 #include <stdbool.h>
 #include <stddef.h>
 
-#define BUTTON_TASK_STACK     2048
-#define BUTTON_TASK_PRIORITY  4
-#define BUTTON_ISR_QUEUE_LEN  4
-#define BUTTON_DEBOUNCE_MS    50
+#define BUTTON_TASK_STACK    2048
+#define BUTTON_TASK_PRIORITY 4
+#define BUTTON_ISR_QUEUE_LEN 4
+#define BUTTON_DEBOUNCE_MS   50
 
 typedef struct {
     button_input_config_t cfg;
@@ -65,8 +65,9 @@ esp_err_t button_input_start(const button_input_config_t *config)
 
     ESP_RETURN_ON_ERROR(configure_button_gpio(s_ctx.cfg.button_gpio), TAG, "gpio config failed");
 
-    if (xTaskCreate(button_task, "btn-handler", BUTTON_TASK_STACK, &s_ctx, BUTTON_TASK_PRIORITY,
-                    NULL) != pdPASS) {
+    if (xTaskCreate(
+            button_task, "btn-handler", BUTTON_TASK_STACK, &s_ctx, BUTTON_TASK_PRIORITY, NULL) !=
+        pdPASS) {
         vQueueDelete(s_ctx.isr_queue);
         s_ctx.isr_queue = NULL;
         vQueueDelete(s_ctx.event_queue);

@@ -52,8 +52,12 @@ esp_err_t water_pump_start(const water_pump_config_t *config)
         ESP_RETURN_ON_ERROR(configure_output_gpio(s_ctx.cfg.relay_gpio), TAG, "relay gpio");
     }
 
-    if (xTaskCreate(water_pump_task, "water-pump", WATER_PUMP_TASK_STACK, &s_ctx,
-                    WATER_PUMP_TASK_PRIO, NULL) != pdPASS) {
+    if (xTaskCreate(water_pump_task,
+                    "water-pump",
+                    WATER_PUMP_TASK_STACK,
+                    &s_ctx,
+                    WATER_PUMP_TASK_PRIO,
+                    NULL) != pdPASS) {
         vQueueDelete(s_ctx.queue);
         s_ctx.queue = NULL;
         return ESP_FAIL;
