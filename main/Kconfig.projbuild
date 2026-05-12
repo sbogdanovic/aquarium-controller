@@ -1,0 +1,121 @@
+menu "Water Level Controller"
+
+config WATER_LEVEL_LED_GPIO
+    int "On-board LED GPIO"
+    range -1 48
+    default 38
+    help
+        Select the GPIO that drives the on-board LED. Use -1 to disable LED control.
+        The LOLIN S3 boards route the built-in RGB LED to GPIO38.
+
+config WATER_LEVEL_LED_BRIGHTNESS
+    int "RGB LED brightness"
+    range 1 255
+    default 32
+    help
+        Brightness applied to the RGB indicator LED (1-255). Lower values reduce power draw.
+
+config WATER_LEVEL_RELAY_GPIO
+    int "Relay control GPIO"
+    range -1 48
+    default 5
+    help
+        Select the GPIO connected to the relay driver. Use -1 to disable the relay output.
+
+config WATER_LEVEL_SENSOR_ADC_CHANNEL
+    int "ADC channel for XKC-Y23A sensor"
+    range 0 7
+    default 0
+    help
+        Choose the ADC1 channel wired to the XKC-Y23A analog output. Channel numbers map to ADC1_CH0..CH7.
+
+config WATER_LEVEL_SENSOR_DIGITAL_INPUT
+    bool "Use digital-output water level sensor"
+    default n
+    help
+        Enable this if the sensor exposes a digital high/low output instead of an analog voltage.
+        The firmware will sample the GPIO directly and skip ADC reads.
+
+config WATER_LEVEL_SENSOR_DIGITAL_ACTIVE_HIGH
+    bool "Digital sensor active-high"
+    depends on WATER_LEVEL_SENSOR_DIGITAL_INPUT
+    default y
+    help
+        Leave enabled if a logic HIGH indicates water-present. Disable if the sensor asserts LOW
+        when water is detected.
+
+choice WATER_LEVEL_SENSOR_DIGITAL_PULL
+    prompt "Digital sensor pull resistor"
+    depends on WATER_LEVEL_SENSOR_DIGITAL_INPUT
+    default WATER_LEVEL_SENSOR_DIGITAL_PULL_NONE
+
+config WATER_LEVEL_SENSOR_DIGITAL_PULL_NONE
+    bool "No pull"
+
+config WATER_LEVEL_SENSOR_DIGITAL_PULL_UP
+    bool "Pull-up"
+
+config WATER_LEVEL_SENSOR_DIGITAL_PULL_DOWN
+    bool "Pull-down"
+
+endchoice
+
+config WATER_LEVEL_SENSOR_SAMPLE_COUNT
+    int "Samples per reading"
+    range 1 64
+    default 8
+    help
+        Number of ADC samples to average for each measurement.
+
+config WATER_LEVEL_SENSOR_THRESHOLD_MV
+    int "Dry threshold (mV)"
+    range 0 3300
+    default 1200
+    help
+        If the averaged sensor voltage is below this threshold, the firmware considers the tank level low.
+
+config WATER_LEVEL_SENSOR_DISCONNECT_MV
+    int "Sensor disconnect threshold (mV)"
+    range 0 500
+    default 50
+    help
+        Voltages below this level are treated as a disconnected or faulty sensor and will raise a fault event.
+
+config WATER_LEVEL_POLL_PERIOD_MS
+    int "Poll period (ms)"
+    range 100 10000
+    default 1000
+    help
+        Delay between successive sensor readings.
+
+config DOSER_COUNT
+    int "Number of dosing channels"
+    range 2 2
+    default 2
+    help
+        Fixed number of dosing channels managed by the firmware. The current design supports
+        exactly two channels (doser1..doser2).
+
+config DOSER1_GPIO
+    int "Doser #1 relay GPIO"
+    range -1 48
+    default 7
+    help
+        GPIO driving the relay or MOSFET for doser1. Set to -1 to disable this channel.
+
+config DOSER2_GPIO
+    int "Doser #2 relay GPIO"
+    range -1 48
+    default 15
+    help
+        GPIO driving the relay or MOSFET for doser2. Set to -1 to disable this channel.
+
+config DOSER_MS_PER_ML
+    int "Milliseconds per milliliter"
+    range 1 10000
+    default 2000
+    help
+        Conversion between requested milliliters and actuator on-time. The default of 2000ms maps
+        to 1ml -> 2s.
+
+endmenu
