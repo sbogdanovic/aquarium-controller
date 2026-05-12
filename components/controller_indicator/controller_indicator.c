@@ -230,7 +230,10 @@ static void apply_color(controller_indicator_ctx_t *ctx, const indicator_color_t
         ESP_LOGW(TAG, "LED transmit failed: %s", esp_err_to_name(err));
         return;
     }
-    rmt_tx_wait_all_done(ctx->rmt_channel, 100);
+    err = rmt_tx_wait_all_done(ctx->rmt_channel, 100);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "LED transmit wait failed: %s", esp_err_to_name(err));
+    }
 }
 
 static uint8_t scale_channel(const controller_indicator_ctx_t *ctx, uint8_t value)

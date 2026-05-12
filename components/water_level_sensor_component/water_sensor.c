@@ -43,6 +43,7 @@ static void water_sensor_task(void *param);
 static void publish_sensor_event(water_sensor_event_t event);
 static void water_sensor_disable_discharge(const water_sensor_ctx_t *ctx);
 static void water_sensor_enable_discharge(const water_sensor_ctx_t *ctx);
+static int raw_to_mv_approx(int raw, adc_bitwidth_t bitwidth, adc_atten_t atten);
 
 static const char *const WATER_LEVEL_SENSOR_EVENT_NAMES[] = {
     [WATER_LEVEL_SENSOR_EVENT_LOW] = "LOW",
@@ -69,11 +70,23 @@ esp_err_t water_sensor_start(const water_sensor_config_t *config)
         return ESP_ERR_NO_MEM;
     }
 
+    esp_err_t cfg_err = ESP_OK;
     if (s_ctx.cfg.use_digital_input) {
-        ESP_RETURN_ON_ERROR(
-            water_sensor_configure_sensor_gpio(&s_ctx), TAG, "Failed to configure sensor GPIO");
+        cfg_err = water_sensor_configure_sensor_gpio(&s_ctx);
+        if (cfg_err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to configure sensor GPIO: %s", esp_err_to_name(cfg_err));
+            vQueueDelete(s_ctx.event_queue);
+            s_ctx.event_queue = NULL;
+            return cfg_err;
+        }
     } else {
-        ESP_RETURN_ON_ERROR(water_sensor_configure_adc(&s_ctx), TAG, "Failed to configure ADC");
+        cfg_err = water_sensor_configure_adc(&s_ctx);
+        if (cfg_err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to configure ADC: %s", esp_err_to_name(cfg_err));
+            vQueueDelete(s_ctx.event_queue);
+            s_ctx.event_queue = NULL;
+            return cfg_err;
+        }
         esp_err_t gpio_err = water_sensor_configure_sensor_gpio(&s_ctx);
         if (gpio_err != ESP_OK) {
             ESP_LOGW(TAG, "Sensor GPIO unavailable: %s", esp_err_to_name(gpio_err));
@@ -154,7 +167,7 @@ static esp_err_t water_sensor_read_mv(water_sensor_ctx_t *ctx, int *reading_mv)
                               "calibration failed");
             total += mv;
         } else {
-            total += raw;
+            total += raw_to_mv_approx(raw, ctx->cfg.bitwidth, ctx->cfg.atten);
         }
         vTaskDelay(pdMS_TO_TICKS(SAMPLE_DELAY_MS));
     }
@@ -355,6 +368,47 @@ static void water_sensor_disable_discharge(const water_sensor_ctx_t *ctx)
                  ctx->sensor_gpio,
                  esp_err_to_name(err));
     }
+}
+
+static int raw_to_mv_approx(int raw, adc_bitwidth_t bitwidth, adc_atten_t atten)
+{
+    int max_mv;
+    switch (atten) {
+    case ADC_ATTEN_DB_0:
+        max_mv = 750;
+        break;
+    case ADC_ATTEN_DB_2_5:
+        max_mv = 1050;
+        break;
+    case ADC_ATTEN_DB_6:
+        max_mv = 1300;
+        break;
+    default:
+        max_mv = 2500;
+        break;
+    }
+
+    int bits;
+    switch (bitwidth) {
+    case ADC_BITWIDTH_9:
+        bits = 9;
+        break;
+    case ADC_BITWIDTH_10:
+        bits = 10;
+        break;
+    case ADC_BITWIDTH_11:
+        bits = 11;
+        break;
+    default:
+        bits = 12;
+        break;
+    }
+
+    int max_raw = (1 << bits) - 1;
+    if (max_raw == 0) {
+        return 0;
+    }
+    return (int)((int64_t)raw * max_mv / max_raw);
 }
 
 static void water_sensor_enable_discharge(const water_sensor_ctx_t *ctx)

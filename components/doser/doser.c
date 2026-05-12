@@ -18,6 +18,7 @@
 typedef struct {
     gpio_num_t relay_gpio;
     QueueHandle_t queue;
+    TaskHandle_t task_handle;
     char name[12];
 } doser_channel_t;
 
@@ -52,9 +53,22 @@ esp_err_t doser_start(const doser_config_t *config)
     }
 
     for (size_t i = 0; i < CONFIG_DOSER_COUNT; ++i) {
-        ESP_RETURN_ON_ERROR(init_channel(&s_ctx.channels[i], s_ctx.cfg.relay_gpios[i], i),
-                            TAG,
-                            "channel init failed");
+        esp_err_t ch_err = init_channel(&s_ctx.channels[i], s_ctx.cfg.relay_gpios[i], i);
+        if (ch_err != ESP_OK) {
+            ESP_LOGE(TAG, "channel %u init failed: %s", (unsigned)i, esp_err_to_name(ch_err));
+            for (size_t j = 0; j < i; ++j) {
+                if (s_ctx.channels[j].task_handle) {
+                    vTaskDelete(s_ctx.channels[j].task_handle);
+                    s_ctx.channels[j].task_handle = NULL;
+                }
+                if (s_ctx.channels[j].queue) {
+                    vQueueDelete(s_ctx.channels[j].queue);
+                    s_ctx.channels[j].queue = NULL;
+                }
+            }
+            memset(&s_ctx, 0, sizeof(s_ctx));
+            return ch_err;
+        }
     }
 
     s_started = true;
@@ -82,9 +96,12 @@ static esp_err_t init_channel(doser_channel_t *channel, gpio_num_t gpio, size_t 
         ESP_LOGW(TAG, "%s disabled (GPIO%d)", channel->name, (int)gpio);
     }
 
-    if (xTaskCreate(
-            doser_task, channel->name, DOSER_TASK_STACK, channel, DOSER_TASK_PRIORITY, NULL) !=
-        pdPASS) {
+    if (xTaskCreate(doser_task,
+                    channel->name,
+                    DOSER_TASK_STACK,
+                    channel,
+                    DOSER_TASK_PRIORITY,
+                    &channel->task_handle) != pdPASS) {
         vQueueDelete(channel->queue);
         channel->queue = NULL;
         return ESP_FAIL;

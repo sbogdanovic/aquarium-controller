@@ -49,7 +49,13 @@ esp_err_t water_pump_start(const water_pump_config_t *config)
     }
 
     if (s_ctx.cfg.relay_gpio >= 0) {
-        ESP_RETURN_ON_ERROR(configure_output_gpio(s_ctx.cfg.relay_gpio), TAG, "relay gpio");
+        esp_err_t gpio_err = configure_output_gpio(s_ctx.cfg.relay_gpio);
+        if (gpio_err != ESP_OK) {
+            vQueueDelete(s_ctx.queue);
+            s_ctx.queue = NULL;
+            ESP_LOGE(TAG, "relay gpio: %s", esp_err_to_name(gpio_err));
+            return gpio_err;
+        }
     }
 
     if (xTaskCreate(water_pump_task,
