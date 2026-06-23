@@ -106,7 +106,9 @@ esp_err_t wifi_bootstrap_start(void)
         return ESP_ERR_NO_MEM;
     }
 
-    esp_netif_create_default_wifi_sta();
+if (esp_netif_create_default_wifi_sta() == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
 
     wifi_init_config_t init_cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_RETURN_ON_ERROR(esp_wifi_init(&init_cfg), TAG, "esp_wifi_init failed");

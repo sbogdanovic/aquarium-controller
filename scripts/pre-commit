@@ -31,14 +31,14 @@ else
     echo "⚠️  clang-format not found, skipping format check"
 fi
 
-if [ -x "scripts/run-host-tests.sh" ]; then
+if [ -f "scripts/run-host-tests.sh" ]; then
     echo "🧪 running host unit tests"
-    if ! ./scripts/run-host-tests.sh; then
+    if ! bash ./scripts/run-host-tests.sh; then
         echo "❌ host unit tests failed; commit blocked"
         exit 1
     fi
 else
-    echo "❌ scripts/run-host-tests.sh not found or not executable; commit blocked"
+    echo "❌ scripts/run-host-tests.sh not found; commit blocked"
     exit 1
 fi
 

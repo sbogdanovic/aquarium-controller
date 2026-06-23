@@ -7,4 +7,4 @@ BUILD_DIR="${ROOT_DIR}/build-host-tests"
 
 cmake -S "${ROOT_DIR}/tests/host" -B "${BUILD_DIR}"
 cmake --build "${BUILD_DIR}"
-ctest --test-dir "${BUILD_DIR}" --output-on-failure
+( cd "${BUILD_DIR}" && ctest --output-on-failure )

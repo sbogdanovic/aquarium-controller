@@ -62,7 +62,7 @@ Manual CMake/CTest flow:
 ```sh
 cmake -S tests/host -B build-host-tests
 cmake --build build-host-tests --parallel
-ctest --test-dir build-host-tests --output-on-failure
+cd build-host-tests && ctest --output-on-failure
 ```
 
 Direct compile fallback (Wi-Fi bootstrap config test only):
