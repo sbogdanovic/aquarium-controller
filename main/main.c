@@ -3,8 +3,10 @@
 #include "doser.h"
 #include "water_pump.h"
 #include "water_sensor.h"
+#include "wifi_bootstrap.h"
 
 #include "hal/adc_types.h"
+#include "esp_err.h"
 #include "esp_log.h"
 #include "sdkconfig.h"
 
@@ -76,4 +78,11 @@ void app_main(void)
     ESP_ERROR_CHECK(doser_start(&doser_cfg));
 
     ESP_ERROR_CHECK(controller_core_init());
+
+    const esp_err_t wifi_err = wifi_bootstrap_start();
+    if (wifi_err != ESP_OK) {
+        ESP_LOGW(TAG,
+                 "Wi-Fi bootstrap unavailable: %s. Local control remains active.",
+                 esp_err_to_name(wifi_err));
+    }
 }

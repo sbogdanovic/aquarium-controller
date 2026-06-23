@@ -1,0 +1,32 @@
+menu "Wi-Fi Bootstrap"
+
+config WIFI_BOOTSTRAP_ENABLE
+    bool "Enable Wi-Fi bootstrap"
+    default n
+    help
+        Enable station-mode Wi-Fi bootstrap for developer-configured connectivity.
+
+if WIFI_BOOTSTRAP_ENABLE
+
+config WIFI_BOOTSTRAP_SSID
+    string "Wi-Fi SSID"
+    default ""
+    help
+        Network SSID used by station-mode Wi-Fi.
+
+config WIFI_BOOTSTRAP_PASSWORD
+    string "Wi-Fi password"
+    default ""
+    help
+        Network password used by station-mode Wi-Fi. Leave empty only for open networks.
+
+config WIFI_BOOTSTRAP_STARTUP_TIMEOUT_MS
+    int "Startup connect window (ms)"
+    range 0 60000
+    default 5000
+    help
+        Maximum boot-time wait for first Wi-Fi connection. Set 0 to skip waiting.
+
+endif
+
+endmenu
