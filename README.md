@@ -9,6 +9,7 @@ Firmware built with ESP-IDF for monitoring an XKC-Y23A water level sensor on an 
 - Dedicated RGB indicator task that accepts `controller_indicator_publish()` commands and maps them to WS2812 colors (defaults to the ESP32-S3 on-board LED)
 - Two independent dosing channels that expose `doser_publish()` so other workflows can enqueue milliliter requests per relay
 - Simple configuration via `menuconfig` (GPIO selection, threshold, sampling rate, disconnect guard, dosing parameters)
+- Optional station-mode Wi-Fi bootstrap with developer-provided SSID/password and bounded startup connect window
 
 ## Architecture Overview
 - **water_sensor component** polls the ADC, classifies the reading, and writes `water_sensor_event_t` values to its queue; `water_sensor_subscribe()` hands that queue to any consumer.
@@ -46,14 +47,46 @@ idf.py set-target esp32s3
 idf.py build
 ```
 
+## Host Unit Tests
+
+Run all host tests from the repository root.
+
+Preferred (one command):
+
+```sh
+./scripts/run-host-tests.sh
+```
+
+Manual CMake/CTest flow:
+
+```sh
+cmake -S tests/host -B build-host-tests
+cmake --build build-host-tests --parallel
+ctest --test-dir build-host-tests --output-on-failure
+```
+
+Direct compile fallback (Wi-Fi bootstrap config test only):
+
+```sh
+cc -std=c11 -Wall -Wextra -Icomponents/wifi_bootstrap/include \
+   components/wifi_bootstrap/wifi_bootstrap_config.c \
+   components/wifi_bootstrap/tests/test_wifi_bootstrap_config.c \
+   -o /tmp/wifi_bootstrap_config_tests && /tmp/wifi_bootstrap_config_tests
+```
+
+For component-specific notes (including ESP-IDF Unity on-device tests), see `components/wifi_bootstrap/README.md`.
+
 ## Configuration Tips
 - Use `idf.py menuconfig` ▸ *Water Level Controller* to change GPIO assignments, switch between analog/digital sensor modes, set the digital active level/pull resistors, adjust the sample count, poll period, or the sensor-disconnect guard voltage.
+- Enable `Wi-Fi Bootstrap ▸ Enable Wi-Fi bootstrap` to connect in station mode using `Wi-Fi SSID` and `Wi-Fi password`.
+- `Startup connect window (ms)` bounds boot wait time for first connection. After timeout, the firmware continues locally and reconnects in the background.
 - If you do not have the RGB LED wired, set `Water Level Controller ▸ On-board LED GPIO` to `-1` to disable the indicator task. For the Wemos/LOLIN S3 boards the built-in RGB LED lives on GPIO38.
 - Configure the *Water Level Controller ▸ Doser* options to remap relay GPIOs or tweak the ms/ml conversion. Disable any channel by setting its GPIO to `-1`.
 - The dry threshold (`mV`) should be determined empirically by logging the sensor voltage with and without water; keep the disconnect guard just below the minimum connected voltage.
 
 ## Repository Layout
 - `main/main.c` – Application entry point that wires components together before starting the controller core
+- `components/wifi_bootstrap` – Reusable Wi-Fi station bootstrap component with its own Kconfig and startup/reconnect behavior
 - `components/water_level_sensor_component` – Sensor task, ADC handling, event enum, and queue subscription helper
 - `components/controller_core` – State machine that monitors the sensor queue and drives actuators through their publish APIs
 - `components/water_pump` – Actuator task with a private queue and `water_pump_publish()` helper for relay control

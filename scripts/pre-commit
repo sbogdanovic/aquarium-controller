@@ -9,7 +9,7 @@ set -euo pipefail
 STAGED=$(git diff --cached --name-only --diff-filter=d -- '*.c' '*.h')
 
 if [ -z "$STAGED" ]; then
-    exit 0
+    echo "ℹ️  no staged C/H files; running host tests anyway"
 fi
 
 # --- clang-format check ---
@@ -29,6 +29,17 @@ if command -v clang-format &>/dev/null; then
     fi
 else
     echo "⚠️  clang-format not found, skipping format check"
+fi
+
+if [ -x "scripts/run-host-tests.sh" ]; then
+    echo "🧪 running host unit tests"
+    if ! ./scripts/run-host-tests.sh; then
+        echo "❌ host unit tests failed; commit blocked"
+        exit 1
+    fi
+else
+    echo "❌ scripts/run-host-tests.sh not found or not executable; commit blocked"
+    exit 1
 fi
 
 echo "✅ pre-commit checks passed"
